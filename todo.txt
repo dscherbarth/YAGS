@@ -1,0 +1,40 @@
+x incorporate jog wheel with glade ui
+x glade ui label sizes
+x ui widget signals
+x auto connect of serial interface
+x serial settings
+x portable tinyg for debug
+x files:
+	dro.c
+	usbserial.c
+	quad.c
+	ui.c
+	gcode.c
+x Makefile
+x test status parsing
+x setup play/pause to issue test gcodes for dro parse testing
+x line number display
+x read and queue up gcode data
+x parse gcode for tool change
+x serial state display
+x play/pause/stop
+status line
+x axis zero commands (g92)
+x machine homing (g28.2)
+x machine zero (g28.3)
+x units: mm/inch (g20/21)
+motors full power on/off
+x update bitmap so only changed values are re-written on dro
+x cooling on/off
+x spindle on/off
+x state machine
+x 	states: Idle, GCPlay, Freehold, Tool change, Jog (Special case)
+x 	Transitions: 
+x better play/pause/stop state indications
+time estimate g0	(extract x/y/z calc from last at top speed)
+time estimate g1	(extract f/x/y/z calc at f)
+time estimate g2/3	(extract f/circumference calc at f)
+x gcode play crash
+x dialog or smaller file chooser
+surface/edge finder
+mm/inch switch on g21/g20 parsing
