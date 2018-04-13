@@ -345,12 +345,15 @@ void *send_gcode (void *ptr)
 				// if the line has gcode in it send it
 				if (rv == -1)
 				{
-					// done reading
-					term_send();
+					if(getPQ() == 32)
+					{
+						// done reading
+						term_send();
 
-					// state transition to cgode file complete
-					Tr_FileComplete();
-					updateExLine ((int) 0, 1);	// reset after done
+						// state transition to cgode file complete
+						Tr_FileComplete();
+						updateExLine ((int) 0, 1);	// reset after done
+					}
 
 				}
 				else
@@ -364,7 +367,7 @@ void *send_gcode (void *ptr)
 							// label to inch
 							measure_setinch();
 						}
-						if (strstr(buf, "g20") || strstr(buf, "G20"))
+						if (strstr(buf, "g21") || strstr(buf, "G21"))
 						{
 							// label to inch
 							measure_setmm();
