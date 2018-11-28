@@ -13,6 +13,8 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 
+GtkWidget *statusline;
+
 GtkWidget *droX;
 GtkWidget *jogX;
 GtkWidget *droY;
@@ -40,6 +42,7 @@ GtkWidget *velocityh;
 
 GtkWidget *planqh;
 GtkWidget *measureh;
+GtkWidget *feedOverrideh;
 
 GtkWidget *Play;
 GtkWidget *Pause;
@@ -84,7 +87,7 @@ extern void *send_gcode (void *ptr);
 
 double 	dX = 0.0, dY = 0.0, dZ = 0.0, dA = 0.0;
 
-void destroy (void) 
+void destroy (void)
 {
      gtk_main_quit ();
 }
@@ -96,7 +99,7 @@ void zeroX_Clicked(GtkButton * b, gpointer data)
 	char temp[80];
 	float x, y, z, a;
 
-	
+
 	if(isIdle())
 	{
 		getCurr(&x, &y, &z, &a);
@@ -113,8 +116,8 @@ void zeroY_Clicked(GtkButton * b, gpointer data)
     (void)data;
 	char temp[80];
 	float x, y, z, a;
-	
-	
+
+
 	if(isIdle())
 	{
 		getCurr(&x, &y, &z, &a);
@@ -132,7 +135,7 @@ void zeroZ_Clicked(GtkButton * b, gpointer data)
 	char temp[80];
 	float x, y, z, a;
 
-	
+
 	if(isIdle())
 	{
 		getCurr(&x, &y, &z, &a);
@@ -161,17 +164,54 @@ void zeroA_Clicked(GtkButton * b, gpointer data)
 	}
 }
 
+int feed_over_state = 0;	// set as default
+void feedover_clicked(GtkButton * b, gpointer data)
+{
+    (void)b;
+    (void)data;
+
+//    if(!isIdle())
+//  	{
+  		if (feed_over_state)
+  		{
+  			feed_over_state = 0;
+  			gtk_button_set_label(GTK_BUTTON(feedOverrideh), "FeedOver");
+  		}
+  		else
+  		{
+        feed_over_state = 1;
+  			gtk_button_set_label(GTK_BUTTON(feedOverrideh), "(FeedOver)");
+        gtk_button_set_label(GTK_BUTTON(jogX), "JogX");
+    		gtk_button_set_label(GTK_BUTTON(jogY), "JogY");
+    		gtk_button_set_label(GTK_BUTTON(jogZ), "JogZ");
+    		gtk_button_set_label(GTK_BUTTON(jogA), "JogA");
+  		}
+//  	}
+}
+
+int isFO(void)
+{
+  return feed_over_state;
+}
+
 int 	jogWhat = -1;	// default, no jogging
 int getJW(void)
 {
-	return jogWhat;
+  if(	!isIdle() && feed_over_state)
+  {
+    return 4; // means we are jogging feed override
+  }
+  else
+  {
+    return jogWhat;
+  }
 }
 
 void jogX_Clicked(GtkButton * b, gpointer data)
 {
     (void)b;
     (void)data;
-	
+
 	if (jogWhat == 0)
 	{
 		gtk_button_set_label(GTK_BUTTON(jogX), "JogX");
@@ -294,6 +334,19 @@ void jogdot001_Clicked(GtkButton * b, gpointer data)
     jogMult = 0.001;
 }
 
+void enablePlay(int enF)
+{
+  gtk_widget_set_sensitive(Play, enF);
+}
+void enablePause(int enF)
+{
+  gtk_widget_set_sensitive(Pause, enF);
+}
+void enableStop(int enF)
+{
+  gtk_widget_set_sensitive(Stop, enF);
+}
+
 void Play_Clicked(GtkButton * b, gpointer data)
 {
 
@@ -379,7 +432,7 @@ void Set_Zero_Clicked(GtkButton * b, gpointer data)
     (void)data;
 //	char temp[80];
 //	float x, y, z, a;
-	
+
 
 	if(isIdle())
 	{
@@ -405,7 +458,7 @@ void measure_clicked(GtkButton * b, gpointer data)
 {
     (void)b;
     (void)data;
-	
+
 
 	if(isIdle())
 	{
@@ -440,7 +493,7 @@ void spin_clicked(GtkButton * b, gpointer data)
 {
     (void)b;
     (void)data;
-	
+
 
 	if(isIdle() || isFreeh())
 	{
@@ -454,7 +507,7 @@ void spin_clicked(GtkButton * b, gpointer data)
 		{
 			spin_mode = 1;
 			gtk_button_set_label(GTK_BUTTON(SpinCtrl), "Spindle Off");
-			sersendNT ("M3 S1000\n");	// spindle on
+			sersendNT ("M3 S1800\n");	// spindle on
 		}
 	}
 }
@@ -464,7 +517,7 @@ void LaserOn_clicked(GtkButton * b, gpointer data)
 {
     (void)b;
     (void)data;
-	
+
 
 	if(isIdle() || isFreeh())
 	{
@@ -483,12 +536,13 @@ void LaserOn_clicked(GtkButton * b, gpointer data)
 	}
 }
 
+extern void initState(void);
 int cool_mode = 0;	// set as default
 void cool_clicked(GtkButton * b, gpointer data)
 {
     (void)b;
     (void)data;
-	
+
 
 	if(isIdle() || isFreeh())
 	{
@@ -507,6 +561,12 @@ void cool_clicked(GtkButton * b, gpointer data)
 	}
 }
 
+void display_status (char *buf)
+{
+  gtk_label_set (GTK_LABEL (statusline), buf);
+//  gtk_statusbar_push (GTK_STATUSBAR (statusline), 0, buf);
+}
+
 void setupui (int argc, char **argv)
 {
     GtkBuilder *builder;
@@ -514,13 +574,16 @@ void setupui (int argc, char **argv)
     GError     *error = NULL;
     PangoFontDescription *dfl;
     PangoFontDescription *efl;
-	
+    PangoFontDescription *sfl;
+
 
     // create font specifiers
     dfl = pango_font_description_from_string ("Monospace");
     pango_font_description_set_size (dfl, 30*PANGO_SCALE);
     efl = pango_font_description_from_string ("Monospace");
     pango_font_description_set_size (efl, 17*PANGO_SCALE);
+    sfl = pango_font_description_from_string ("Monospace");
+    pango_font_description_set_size (sfl, 11*PANGO_SCALE);
 
     /* Init GTK+ */
     gdk_threads_init();
@@ -540,27 +603,31 @@ void setupui (int argc, char **argv)
 
 	// setup the leveler
 	levInit();
-	
+
     /* Get main window pointer from UI */
     window = GTK_WIDGET( gtk_builder_get_object( builder, "window1" ) );
 
   	gtk_signal_connect (GTK_OBJECT (window), "destroy",
 						GTK_SIGNAL_FUNC (destroy), NULL);
 
+  // get status line handle
+    statusline = GTK_WIDGET( gtk_builder_get_object( builder, "statusLine" ) );
+    display_status ("Status");
+
 	// get dro label handles
     droX = GTK_WIDGET( gtk_builder_get_object( builder, "droX" ) );
-    gtk_widget_modify_font(droX, dfl);  
+    gtk_widget_modify_font(droX, dfl);
     jogX = GTK_WIDGET( gtk_builder_get_object( builder, "JogX" ) );
     droY = GTK_WIDGET( gtk_builder_get_object( builder, "droY" ) );
-    gtk_widget_modify_font(droY, dfl);  
+    gtk_widget_modify_font(droY, dfl);
     jogY = GTK_WIDGET( gtk_builder_get_object( builder, "JogY" ) );
     droZ = GTK_WIDGET( gtk_builder_get_object( builder, "droZ" ) );
-    gtk_widget_modify_font(droZ, dfl);  
+    gtk_widget_modify_font(droZ, dfl);
     jogZ = GTK_WIDGET( gtk_builder_get_object( builder, "JogZ" ) );
     droA = GTK_WIDGET( gtk_builder_get_object( builder, "droA" ) );
-    gtk_widget_modify_font(droA, dfl);  
+    gtk_widget_modify_font(droA, dfl);
     jogA = GTK_WIDGET( gtk_builder_get_object( builder, "JogA" ) );
-    
+
     // get jog size handles
     jog1 = GTK_WIDGET( gtk_builder_get_object( builder, "jog1" ) );
     jogdot1 = GTK_WIDGET( gtk_builder_get_object( builder, "jogdot1" ) );
@@ -578,13 +645,15 @@ void setupui (int argc, char **argv)
 	gclineh 	= GTK_WIDGET( gtk_builder_get_object( builder, "gclineh" ) );
     feedh 	= GTK_WIDGET( gtk_builder_get_object( builder, "feedh" ) );
     velocityh = GTK_WIDGET( gtk_builder_get_object( builder, "velh" ) );
-    gtk_widget_modify_font(lineh, efl);  
-    gtk_widget_modify_font(gclineh, efl);  
-    gtk_widget_modify_font(feedh, efl);  
-    gtk_widget_modify_font(velocityh, efl);  
+    gtk_widget_modify_font(lineh, efl);
+    gtk_widget_modify_font(gclineh, efl);
+    gtk_widget_modify_font(feedh, efl);
+    gtk_widget_modify_font(velocityh, efl);
+    gtk_widget_modify_font(statusline, sfl);
 
 	planqh 		= GTK_WIDGET( gtk_builder_get_object( builder, "planq" ) );
-	measureh 	= GTK_WIDGET( gtk_builder_get_object( builder, "measure" ) );
+  measureh 	= GTK_WIDGET( gtk_builder_get_object( builder, "measure" ) );
+  feedOverrideh 	= GTK_WIDGET( gtk_builder_get_object( builder, "FeedOver" ) );
 
 	CoolCtrl 	= GTK_WIDGET( gtk_builder_get_object( builder, "CoolingCtrl" ) );
 	SpinCtrl 	= GTK_WIDGET( gtk_builder_get_object( builder, "SpinCtrl" ) );
@@ -607,7 +676,7 @@ void setupui (int argc, char **argv)
 
 	Level	= GTK_WIDGET( gtk_builder_get_object( builder, "level" ) );
 	ZProbe	= GTK_WIDGET( gtk_builder_get_object( builder, "zprobe" ) );
-	
+
     /* Connect signals */
     gtk_signal_connect (GTK_OBJECT(ZProbe), "clicked", GTK_SIGNAL_FUNC(ZProbe_Clicked), NULL);
 
@@ -635,6 +704,7 @@ void setupui (int argc, char **argv)
     gtk_signal_connect (GTK_OBJECT(Set_Zero), "clicked", GTK_SIGNAL_FUNC(Set_Zero_Clicked), NULL);
 
     gtk_signal_connect (GTK_OBJECT(measureh), "clicked", GTK_SIGNAL_FUNC(measure_clicked), NULL);
+    gtk_signal_connect (GTK_OBJECT(feedOverrideh), "clicked", GTK_SIGNAL_FUNC(feedover_clicked), NULL);
 
     gtk_signal_connect (GTK_OBJECT(CoolCtrl), "clicked", GTK_SIGNAL_FUNC(cool_clicked), NULL);
     gtk_signal_connect (GTK_OBJECT(SpinCtrl), "clicked", GTK_SIGNAL_FUNC(spin_clicked), NULL);
@@ -643,12 +713,14 @@ void setupui (int argc, char **argv)
     gtk_signal_connect (GTK_OBJECT(Level), "clicked", GTK_SIGNAL_FUNC(Level_Clicked), NULL);
 
     gtk_signal_connect (GTK_OBJECT(GCFile), "file-set", GTK_SIGNAL_FUNC(file_set), NULL);
-	
+
     /* Destroy builder, since we don't need it anymore */
     g_object_unref( G_OBJECT( builder ) );
 
     /* Show window. All other widgets are automatically shown by GtkBuilder */
     gtk_widget_show( window );
+
+    initState();
 
 }
 
@@ -678,10 +750,10 @@ void updatePlanq (float pQ)
 {
 	char temp[100];
 	float disp_prog;
-	
+
 	// reform the percent for display purposes
 	disp_prog = (32.0 - pQ) * 3;
-	
+
 	gdk_threads_enter();
 	gtk_progress_set_value (GTK_PROGRESS (planqh), disp_prog);
 	gdk_threads_leave();
@@ -690,7 +762,7 @@ void updatePlanq (float pQ)
 void updateGCLine (int GCL, int lock)
 {
 	char temp[100];
-	
+
 	if(lock) gdk_threads_enter();
 	sprintf(temp, "%d", GCL);
 	gtk_label_set (GTK_LABEL (gclineh), temp);
@@ -701,7 +773,7 @@ void updateGCEstTime (int time, int lock)
 {
 	char temp[100];
 	int hour, min, sec;
-	
+
 	if(lock) gdk_threads_enter();
 	sec = time % 60; min = (time / 60) % 60; hour = time / 3600;
 	sprintf(temp, "%02d:%02d:%02d", hour, min, sec);
@@ -713,7 +785,7 @@ void updateGCRemTime (int time, int lock)
 {
 	char temp[100];
 	int hour, min, sec;
-	
+
 	if(lock) gdk_threads_enter();
 	sec = time % 60; min = (time / 60) % 60; hour = time / 3600;
 	sprintf(temp, "%02d:%02d:%02d", hour, min, sec);
@@ -724,7 +796,7 @@ void updateGCRemTime (int time, int lock)
 void updateExLine (int GCL, int lock)
 {
 	char temp[100];
-	
+
 	if(lock) gdk_threads_enter();
 	sprintf(temp, "%d", GCL);
 	gtk_label_set (GTK_LABEL (lineh), temp);
@@ -738,10 +810,23 @@ void updateGCLineT (char *text)
 	gdk_threads_leave();
 }
 
+float feedFactor = 1.0;
+float oldFeedFactor = 1.0;
+
+void setFeedFactor (float ff)
+{
+  feedFactor = ff;
+}
+
+float getFeedFactor (void)
+{
+  return feedFactor;
+}
+
 void updateDro (float tX, float tY, float tZ, float tA, float tF, float tV, int bitmap)
 {
 	char temp[120];
-	
+
 	gdk_threads_enter();
 
 	// only update the fields that have changed
@@ -765,10 +850,11 @@ void updateDro (float tX, float tY, float tZ, float tA, float tF, float tV, int 
 		sprintf(temp, "%07.3f", tA);
 		gtk_label_set (GTK_LABEL (droA), temp);
 	}
-	if (bitmap & 16)
+	if ((bitmap & 16) || (feedFactor != oldFeedFactor))
 	{
-		sprintf (temp, "%5.0f", tF);
+		sprintf (temp, "%5.0f/%3.1f", tF, feedFactor);
 		gtk_label_set (GTK_LABEL (feedh), temp);
+    oldFeedFactor = feedFactor;
 	}
 	if (bitmap & 32)
 	{

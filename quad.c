@@ -26,7 +26,7 @@ typedef struct je
 {
 	char axis[2];
 	float magnitude;
-	
+
 } jog_ele;
 
 void sersendz(char *buf);
@@ -35,38 +35,51 @@ void sersendz(char *buf);
 // jog queue handling thread
 void *jog_queue (void *ptr)
 {
+  struct mq_attr attr;
 	jog_ele	je;
-    char temp[65];
-	int rc;
-	
+	jog_ele	je_tot;
+  char temp[65];
+	int rc, i;
+
 	while (1)
 	{
 		if (mq)
 		{
-			
-			rc = mq_receive(mq, (char *)&je, sizeof(jog_ele), NULL);
-			if (0 != rc )
+			// find out how many entries there are right now
+			mq_getattr(mq, &attr);
+			je_tot.axis[0] = 0; je_tot.magnitude = 0.0;
+			for(i=0; i<attr.mq_curmsgs; i++)
 			{
-				// we have a jog entry, wait until the tinyg can take it
-				while (1)
+        rc = mq_receive(mq, (char *)&je, sizeof(jog_ele), NULL);
+				if (0 != rc )
 				{
-					if (getPQ() > MINPLANNERJOG)
-					{
-						sprintf(temp, "g91 g0 %s%f\n", je.axis, je.magnitude);
-						sersendz(temp);
-						sersendz("g90\n");
-						break;
-					}
-					else
-					{
-						usleep(5000);	// hope this doesn't get stuck..
-					}
+        	je_tot.axis[0] = je.axis[0]; je_tot.axis[1] = je.axis[1]; je_tot.magnitude += je.magnitude;
+				}
+				else
+				{
+					break;
 				}
 			}
-			else
+			// we have a jog entry, wait until the tinyg can take it
+			while (1)
 			{
-				usleep(5000);	// really shouldn't happen
+				if (je_tot.axis[0] == 0 || je_tot.magnitude == 0.0)
+				{
+					break;	// nothing to do
+				}
+				if (getPQ() > MINPLANNERJOG)
+				{
+					sprintf(temp, "g91 g0 %s%f\n", je_tot.axis, je_tot.magnitude);
+					sersendz(temp);
+					sersendz("g90\n");
+					break;
+				}
+				else
+				{
+					usleep(5000);	// give tinyg some time to work
+				}
 			}
+			usleep(50000);	// give the queue a chance to fill some
 		}
 		else
 		{
@@ -74,25 +87,27 @@ void *jog_queue (void *ptr)
 		}
 	}
 }
+void setFeedFactor (float ff);
+float getFeedFactor (void);
 
 void jog(char *what, float howmuch)
 {
     char temp[65];
 	jog_ele	je;
 	int rc;
-	
+
 
 	// create and open the queue if it doesn't exist
 	if (mq == 0)
 	{
 		// create the queue for jogging
 		struct mq_attr	attr;
-		
+
 		attr.mq_flags = 0;
 		attr.mq_maxmsg = 500;
 		attr.mq_msgsize = sizeof(jog_ele);
 		attr.mq_curmsgs = 0;
-		
+
 		mq = mq_open("/jogqueue", O_CREAT | O_RDWR, 0777, &attr);
 	}
 
@@ -103,6 +118,13 @@ void jog(char *what, float howmuch)
 		je.magnitude = howmuch;
 		rc = mq_send (mq, (char *)&je, sizeof(jog_ele), 0);
 	}
+	else if(isGCPlay() && what[0] == 'f')
+	{
+		// jogging the feed rate no need to queue, just update the factor and limit the range
+		setFeedFactor(getFeedFactor() + howmuch);
+		if(getFeedFactor() > 10.0) setFeedFactor(10.0);
+		if(getFeedFactor() < 0.1) setFeedFactor(0.1);
+	}
 }
 
 int value = 0;
@@ -112,13 +134,13 @@ void *jog_quad (void *ptr)
 {
     int lastval, newval;
 	float tJ = 0.0;
-	
+
 
 	lastval = value / 4;
 	while (1)
 	{
 		usleep(10000);
-		
+
 		// if we are jogging and the jog wheel moved make the update
 		newval = value / 4;
 		if (lastval != newval)
@@ -149,6 +171,10 @@ void *jog_quad (void *ptr)
 				// send it as a relative move
 				jog("a", tJ);
 				break;
+
+			case 4:
+				// 'jogging' the feed rate
+				jog("f", tJ);
 			}
 		}
     }
@@ -195,4 +221,3 @@ void setupencoder(void)
     wiringPiISR(23,INT_EDGE_BOTH, updateEncoders);
     wiringPiISR(24,INT_EDGE_BOTH, updateEncoders);
 }
-

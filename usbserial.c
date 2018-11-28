@@ -57,7 +57,7 @@ int set_interface_attribs (int fd)
 	{
 		return -1;
 	}
-	
+
     return 0;
 }
 
@@ -71,7 +71,8 @@ void set_blocking (int fd, int should_block)
 	}
 
 	tty.c_cc[VMIN]  = should_block ? 1 : 0;
-	tty.c_cc[VTIME] = 5;            // 0.5 seconds read timeout
+	tty.c_cc[VTIME] = 0;            // no timeout
+//	tty.c_cc[VTIME] = 5;            // 0.5 seconds read timeout
 
 	tcsetattr (fd, TCSANOW, &tty);
 }
@@ -82,7 +83,7 @@ int readLine (int fd, char *line)
 	char temp[120];
 
 	memset (line, 0, 200);
-	
+
 	// collect an entire line reading 1 char at a time..
 	while (1)
 	{
@@ -123,7 +124,7 @@ int tokenRead(char *line, char *token, float *val, int bump)
 	char *vt;
 	int rv = 0;		// default is token not found
 
-	
+
 	// temp copy so we can null the rest of the line for better scanf
 	strcpy(templine, line);
     token = strstr(templine, token);
@@ -132,7 +133,7 @@ int tokenRead(char *line, char *token, float *val, int bump)
 		value = token + bump;	vt = index(value, ',');	if (vt) *vt = 0;
 		sscanf(value, "%f", val);
 		rv = 1;
-    }    
+    }
 	return rv;
 }
 
@@ -141,13 +142,13 @@ float GCLineno;
 void parseLine (char *line, float *X, float *Y, float *Z, float *A, float *F, float *V, float *S, int *bitmap)
 {
 	*bitmap = 0;
-	
+
     // look for posx, y, z, a tags and parse the value
 	if (tokenRead (line, "posx", X, 5)) *bitmap |= 1;
 	if (tokenRead (line, "posy", Y, 5)) *bitmap |= 2;
 	if (tokenRead (line, "posz", Z, 5)) *bitmap |= 4;
 	if (tokenRead (line, "posa", A, 5)) *bitmap |= 8;
-	
+
 	// also look for line, feed and vel
 	if (tokenRead (line, "feed", F, 5)) *bitmap |= 16;
 	if (tokenRead (line, "vel", V, 4)) *bitmap |= 32;
@@ -168,12 +169,12 @@ int getPQ (void)
 {
 	return (int)qr;
 }
-	
+
 int getLineno (void)
 {
 	return (int)GCLineno;
 }
-	
+
 void queueState(int *qrp, int *qip, int *qop)
 {
 	*qrp = qr;
@@ -196,22 +197,28 @@ void sersendz(char *buf)
 int sersendNT(char *buf)
 {
 	int rv;
-	
+
 	// write might fail if the tinyg planning buffer is full
 	rv = write (fd, buf, strlen(buf));
-	
+
 	return rv;
 }
 
 void updateLevel (float tZ, float tV, float tS, int bitmap);
 void updateZProbe (float tZ, float tV, float tS, int bitmap);
 
+int holdOff = 0;
+int isHoldoff(void)
+{
+	return holdOff;
+}
+
 void *update_serial (void *ptr)
 {
     char templine[200], temp[35];
     static float	tX, tY, tZ, tA, tF, tV, tS;
-	int i, rlen, bitmap;
-	
+		int i, rlen, bitmap;
+
 
     // outer connect loop
     // open the serial interface and configure
@@ -254,16 +261,40 @@ void *update_serial (void *ptr)
 			write(fd, safe1, strlen(safe1));
 			write(fd, safe2, strlen(safe2));
 			write(fd, safe3, strlen(safe3));
-			
+
 			// inner read loop
+			int retry = 0;
 			while (1)
 			{
-				usleep(1000);
-				
-				// read till end of line
-				rlen = readLine(fd, templine);
+
+				// read till end of line (with retries)
+				while(1)
+				{
+					rlen = readLine(fd, templine);
+					if(rlen > 0)
+					{
+						holdOff = 0;
+						retry = 0;
+						break;
+					}
+					else
+					{
+						if(retry++ < 20)
+						{
+							holdOff = 1;
+							usleep(1000);
+						}
+						else
+						{
+							break;
+						}
+					}
+				}
 				if (-1 == rlen)
 				{
+					// comm disconnected, probably should kill a gcode play in gtk_progress_set_value
+					Tr_Stop();
+
 					updatecommstat(0);
 					close (fd);
 					break;
@@ -274,9 +305,9 @@ void *update_serial (void *ptr)
 				currX = tX; currY = tY; currZ = tZ; currA = tA;
 
 				updateDro (tX, tY, tZ, tA, tF, tV, bitmap);
-				
+
 				updatePlanq (qr);
-				
+
 				if (isLevel())
 				{
 					// we are calibrating, update the calibration state

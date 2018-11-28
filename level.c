@@ -23,7 +23,7 @@
 float levarray[XLEVMAX][YLEVMAX];	// uses 20K
 float levXpos, levOldXpos = 0.0;				// ongoing pos
 float levYpos, levOldYpos = 0.0;				// for z-warp adjustment
-float levZpos, levOldZpos = 0.0;				// 
+float levZpos, levOldZpos = 0.0;				//
 
 float levXstart, levYstart, levXend, levYend, levStep;
 float levUpper, levLower, levFeed;
@@ -50,7 +50,7 @@ void levInit()
 {
 	FILE *config = NULL;
 	int ix, iy;
-	
+
 	// init the array to zeros
 	for(ix=0; ix<XLEVMAX; ix++)
 	{
@@ -59,7 +59,7 @@ void levInit()
 			levarray[ix][iy] = 0.0;
 		}
 	}
-	
+
 	// set defaults in case the file is not found
 	levXstart = 0.0; levYstart = 0.0;
 	levXend  = 25.0; levYend  = 25.0;
@@ -67,7 +67,7 @@ void levInit()
 	levUpper = 0.5;
 	levLower = -1.0;
 	levFeed = 27.0;
-		
+
 	// open and read the config file to get x,y dimensions and step in mm
 	char *buf = NULL;
 	int len = 0;
@@ -101,7 +101,7 @@ void levInit()
 			levarray[ix][iy] = 0.0;
 		}
 	}
-	
+
 	// open and read the data file to get x,y dimensions and step in mm
 	FILE *levDat = NULL;
 	levDat = fopen ("level.dat", "r");
@@ -110,7 +110,7 @@ void levInit()
 		char *xp = NULL;
 		char *yp = NULL;
 		int levXsize, levYsize;
-		
+
 		// read sizes
 		getline(&buf, &len, levDat);
 		xp = strstr(buf, "Xsize"); if (xp) {xp += 6; sscanf (xp, "%i", &levXsize);}
@@ -120,7 +120,7 @@ void levInit()
 		// limit as nec
 		if (levXsize > XLEVMAX) levXsize = XLEVMAX;
 		if (levYsize > YLEVMAX) levYsize = YLEVMAX;
-		
+
 		// read into the array
 		int i, j;
 		for (i=0; i<levXsize; i++)
@@ -131,7 +131,7 @@ void levInit()
 				sscanf(buf, "%f", &levarray[i][j]);
 			}
 		}
-		
+
 		fclose(levDat);
 	}
 	if (buf != NULL) free(buf);
@@ -180,7 +180,7 @@ int waitTimer = 0;
 void levDoProbe (int counter)
 {
 	char temp[120];
-	
+
 	// issue the gcode position and probe commands and wait for done
 	levDone = 0;	// indicate not done yet
 	if(!levPos)
@@ -194,7 +194,7 @@ void levDoProbe (int counter)
 		sprintf (temp, "g38.2 z%f f%f\n", levLower, levFeed);
 		sersend (temp, strlen(temp));
 	}
-	
+
 	// start/restart the timeout timer
 	waitTimer = counter;
 }
@@ -235,7 +235,7 @@ void updateZProbe (float tZ, float tV, float tS, int bitmap)
 		gtk_label_set (GTK_LABEL (droZ), "000.000");
 		gtk_button_set_label(GTK_BUTTON(ZProbe), "ZProbe");
 		gdk_threads_leave();
-		
+
 		Tr_ZProbe();
 
 	}
@@ -245,7 +245,7 @@ void updateZProbe (float tZ, float tV, float tS, int bitmap)
 int levTestDone(int counter)
 {
 	int rc = levDone;
-	
+
 	// check for timeout
 	if(waitTimer != 0 && (counter - waitTimer > TIMEOUT))
 	{
@@ -260,8 +260,8 @@ int levTestDone(int counter)
 int levSave()
 {
 	int rc = 0;
-	
-	
+
+
 	// got all of the data, write the level array data file
 	FILE *levDat = NULL;
 	levDat = fopen ("level.dat", "w");
@@ -281,10 +281,10 @@ int levSave()
 				fprintf(levDat, "%f\n", levarray[i][j]);
 			}
 		}
-		
+
 		fclose(levDat);
 	}
-	
+
 	return rc;
 }
 
@@ -304,7 +304,7 @@ float interpolate(float x, float y)
 		// in range, find correct grid
 		xindex = (int)((x - levXstart)/levStep);
 		yindex = (int)((y - levYstart)/levStep);
-		
+
 		rc = levarray[xindex][yindex];
 	}
 	return rc;
@@ -335,7 +335,7 @@ int levApply(char *code, char *newcode)
 	char *fp = NULL;
 	int gWhat = 0;
 
-	
+
 	// parse the gcode for g1, g2, g3
 	if (strstr (code, "g1 ") || strstr (code, "G1 ")) {gWhat = 1; gp = "G1";}
  	if (strstr (code, "g2 ") || strstr (code, "G2 ")) {gWhat = 2; gp = "G2";}
@@ -353,10 +353,10 @@ int levApply(char *code, char *newcode)
 		kp = strstr(code, "K"); if (kp) {kp++; sscanf (kp, "%f", &cmdK);}
 		rp = strstr(code, "R"); if (rp) {rp++; sscanf (rp, "%f", &cmdR);}
 		fp = strstr(code, "F"); if (fp) {fp++; sscanf (fp, "%f", &cmdF);}
-		
+
 		// get the z adjustment value
 		adjZ = interpolate (cmdX, cmdY);
-		
+
 		// create a new gcode line
 		sprintf (newcode, "%s ", gp);
 		if (fp) sprintf (&newcode[strlen (newcode)], "F%f ", cmdF);
@@ -373,6 +373,6 @@ int levApply(char *code, char *newcode)
 	{
 		strcpy (newcode, code);
 	}
-	
+
 	return rc;
 }

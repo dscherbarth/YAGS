@@ -63,18 +63,33 @@ int isGCPlay(void)
 
 extern GtkWidget *Play;
 extern GtkWidget *ZProbe;
+extern void enablePlay(int enF);
+extern void enablePause(int enF);
+extern void enableStop(int enF);
+
+void initState(void)
+{
+	// set initial state to Idle
+	state = STATEIDLE;
+
+	// disable appropriate buttons
+	enablePlay(1);
+	enablePause(0);
+	enableStop(0);
+
+}
 
 void Tr_ZProbe(void)
 {
 	if (!isCommUp())
 		return;
-		
-	if (state == STATEIDLE)	
+
+	if (state == STATEIDLE)
 	{
 		// send the probe command
 		gtk_button_set_label(GTK_BUTTON(ZProbe), "ZProbing");
 		sersendz ("g38.2 f25 z-2\n");
-		
+
 		// set the state
 		state = STATEZPROBE;
 	}
@@ -84,20 +99,29 @@ void Tr_ZProbe(void)
 	}
 }
 
+void Tr_Playable(void)
+{
+//	enablePlay(1);
+
+}
+
 // transition to Play
 void Tr_Play(void)
 {
 	if (!isCommUp())
 		return;
-		
-	if (state == STATEIDLE)	
+
+	if (state == STATEIDLE)
 	{
 		// from idle to play a gcode file
 		// get the file name and handle and setup to send itoa
 		PlayCGFile ();
-		
+
 		// state is GCPLAY
 		state = STATEGCPLAY;
+		enablePlay(0);
+		enablePause(1);
+		enableStop(1);
 	}
 	else if (state == STATEFREEH)
 	{
@@ -106,15 +130,21 @@ void Tr_Play(void)
 
 		// state is GCPLAY
 		state = STATEGCPLAY;
+		enablePlay(0);
+		enablePause(1);
+		enableStop(1);
 	}
 	else if (state == STATETOOLCH)
 	{
 		// restart after a toolchange
 		// change the button text
 		gtk_button_set_label(GTK_BUTTON(Play), "Play");
-		
+
 		// state is GCPLAY
 		state = STATEGCPLAY;
+		enablePlay(0);
+		enablePause(1);
+		enableStop(1);
 	}
 }
 
@@ -125,9 +155,12 @@ void Tr_Pause(void)
 	{
 		// ! to enter freehold
 		sersendNT ("!");		// pause
-		
+
 		// state is FREEHOLD
 		state = STATEFREEH;
+		enablePlay(1);
+		enableStop(1);
+		enablePause(0);
 	}
 }
 
@@ -138,18 +171,18 @@ extern GtkWidget *Level;
 // transition to stop
 void Tr_Stop(void)
 {
-	if (state == STATEGCPLAY)	
+	if (state == STATEGCPLAY)
 	{
 		sersendNT ("!");		// pause
-		
+
 		// player is going to get one more increment..
 		exline = -1;
-		
+
 		// state is FREEHOLD
 		state = STATEFREEH;
 
 		usleep(150000);
-		
+
 		// from gcplay to idle
 		term_send();
 
@@ -160,43 +193,55 @@ void Tr_Stop(void)
 		state = STATEIDLE;
 		usleep(350000);
 		updateExLine ((int) 0, 0);
+		enablePlay(1);
+		enablePause(0);
+		enableStop(0);
 
 	}
 	else if (state == STATEFREEH)
 	{
 		// % to idle from freehold
-		sersendNT ("!%");		// restart
-		
+		sersendNT ("!%");		// clear queue
+
 		// state is GCPLAY
 		state = STATEIDLE;
+		enablePlay(1);
+		enablePause(0);
+		enableStop(0);
 		usleep(150000);
 		updateExLine ((int) 0, 0);
 	}
 	else if (state == STATELEVEL)
 	{
 		gtk_button_set_label(GTK_BUTTON(Level), "Level");
-		
+
 		// set state back to idle
 		state = STATEIDLE;
+		enablePlay(1);
+		enablePause(0);
+		enableStop(0);
 	}
 }
 
 // transition to file complete
 void Tr_FileComplete(void)
 {
-	if (state == STATEGCPLAY)	
+	if (state == STATEGCPLAY)
 	{
 		// from gcplay to idle
 
 		// state is GCPLAY
 		state = STATEIDLE;
+		enablePlay(1);
+		enablePause(0);
+		enableStop(0);
 	}
 }
 
 // transition to M3
 void Tr_M6(void)
 {
-	if (state == STATEGCPLAY)	
+	if (state == STATEGCPLAY)
 	{
 		// from gcplay to tool change
 		gdk_threads_enter();
@@ -205,13 +250,16 @@ void Tr_M6(void)
 
 		// state is GCPLAY
 		state = STATETOOLCH;
+		enablePlay(1);
+		enablePause(0);
+		enableStop(0);
 	}
 }
 
 // transition to level
 void Tr_Level(void)
 {
-	if (state == STATEIDLE)	
+	if (state == STATEIDLE)
 	{
 		// show that leveling is active
 		gtk_button_set_label(GTK_BUTTON(Level), "Leveling");
@@ -227,9 +275,8 @@ void Tr_Level(void)
 		gdk_threads_enter();
 		gtk_button_set_label(GTK_BUTTON(Level), "Level");
 		gdk_threads_leave();
-		
+
 		// set state back to idle
 		state = STATEIDLE;
 	}
 }
-

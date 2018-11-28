@@ -24,14 +24,16 @@ extern int getPQ (void);
 
 extern void measure_setinch(void);
 extern void measure_setmm(void);
+extern float getFeedFactor (void);
+extern int isFO(void);
 
 void getXYZ (char *line, float *x, float *y, float *z)
 {
 	char *xp = NULL;
 	char *yp = NULL;
 	char *zp = NULL;
-	
-	
+
+
 	xp = strstr(line, "X"); if (xp) {xp++; sscanf (xp, "%f", x);}
 	yp = strstr(line, "Y"); if (yp) {yp++; sscanf (yp, "%f", y);}
 	zp = strstr(line, "Z"); if (zp) {zp++; sscanf (zp, "%f", z);}
@@ -43,8 +45,8 @@ void getXYIJ (char *line, float *x, float *y, float *i, float *j)
 	char *yp = NULL;
 	char *ip = NULL;
 	char *jp = NULL;
-	
-	
+
+
 	xp = strstr(line, "X"); if (xp) {xp++; sscanf (xp, "%f", x);}
 	yp = strstr(line, "Y"); if (yp) {yp++; sscanf (yp, "%f", y);}
 	ip = strstr(line, "I"); if (ip) {ip++; sscanf (ip, "%f", i);}
@@ -56,17 +58,25 @@ float getFeed (char *line)
 	char *fp = NULL;
 	float f = 300.0;
 
-	
+
 	fp = strstr(line, "F"); if (fp) {fp++; sscanf (fp, "%f", &f);}
 
 	return f;
 }
 
+float last_speed = 0.0;			// the feedrate to override
+
+void foApply (char *line)
+{
+		// just add a new feedrate to the end of the line (better be long enough)
+		sprintf(&line[strlen(line)-2], "F%f\n", last_speed * getFeedFactor());
+}
+
 float lineLen(float iX, float iY, float iZ, float gX, float gY, float gZ)
 {
 	float sq;
-	
-	
+
+
 //	sq = ((gX - iX) * (gX - iX)) + ((gY - iY) * (gY - iY)) + ((gZ - iZ) * (gZ - iZ));
 	sq = ((gX - iX) * (gX - iX)) + ((gY - iY) * (gY - iY));
 
@@ -109,14 +119,14 @@ int parseGCTime (char *line, int len)
 	float theta = 0.0;
 	float radius = 0;
 	float cosang;
-	
-	
+
+
 	// read the speed if it is present on this line
 	if (strstr (line, "F"))
 	{
 		speed = getFeed(line);
 	}
-	
+
 	// find g0 and g1 and feed values
 	if (strstr (line, "g0") || strstr(line, "G0"))
 	{
@@ -126,11 +136,11 @@ int parseGCTime (char *line, int len)
 
 		// save min/max
 		saveMinMax(gX, gY);
-		
+
 		// determine length
 		dist = lineLen(sX, sY, sZ, gX, gY, gZ);
 		sX = gX; sY = gY; sZ = gZ;			// update the positions
-		
+
 		// time based on feed
 		rv = (int)((dist / 3400.0) * 60.0);
 	}
@@ -139,14 +149,14 @@ int parseGCTime (char *line, int len)
 		// read x,y,z
 		gX = sX; gY = sY; gZ = sZ;			// initial start position
 		getXYZ (line, &gX, &gY, &gZ);
-		
+
 		// save min/max
 		saveMinMax(gX, gY);
-		
+
 		// determine length
 		dist = lineLen(sX, sY, sZ, gX, gY, gZ);
 		sX = gX; sY = gY; sZ = gZ;			// update the positions
-		
+
 		// time based on feed
 		rv = (int)((dist / speed) * 60.0);
 	}
@@ -156,10 +166,10 @@ int parseGCTime (char *line, int len)
 		// get x, y, i, j parameters
 		gX = sX; gY = sY;					// initial start position
 		getXYIJ (line, &gX, &gY, &I, &J);
-		
+
 		// save min/max
 		saveMinMax(gX, gY);
-		
+
 		// calc arc length
 		//    dist from start to finish sqrt ( (sX-gX)^2 + (sY-gY)^2 )
 		//    use law of cosines to get dist from start point to end point
@@ -169,14 +179,14 @@ int parseGCTime (char *line, int len)
 		if (cosang < 0) cosang = -cosang;
 		cosang = fmodf(cosang, (3.14159/2));
 		theta = acosf(cosang);
-		
+
 		//    determine arc measure (angle) in radians
 		//    arc length is rTheta
 		dist = radius * theta;
 		rv = (int)((dist / speed) * 60);
-		
+
 		sX = gX; sY = gY; sZ = gZ;			// update the positions
-		
+
 	}
 
 	return rv;
@@ -193,14 +203,14 @@ int estCGFile (void)
 	int lines = 0;
 	int est_time = 0;
 	FILE *tmpgcode = NULL;
-	
+
 
 	// this is where we open the file and send gcode lines
-	filename = gtk_file_chooser_get_filename (GTK_FILE_CHOOSER (GCFile));	
-	
+	filename = gtk_file_chooser_get_filename (GTK_FILE_CHOOSER (GCFile));
+
 	// open the file
 	tmpgcode = fopen (filename, "r");
-	
+
 	// read the entire file, counting lines
 	initMinMax();
 
@@ -217,10 +227,10 @@ levConfWrite( x1, y1, x2, y2);
 
 	// display the total number of lines
 	updateGCLine ((int) lines, 0);
-	
+
 	// update the estimated time
 	updateGCEstTime ((int) est_time, 0);
-	
+
 	// close and re-open the file
 	free(buf);
 	fclose(tmpgcode);
@@ -237,33 +247,38 @@ int PlayCGFile (void)
 	int len = 200;
 	int lines = 0;
 	int est_time = 0;
-	
+
 
 	// this is where we open the file and send gcode lines
-	filename = gtk_file_chooser_get_filename (GTK_FILE_CHOOSER (GCFile));	
-	
+	filename = gtk_file_chooser_get_filename (GTK_FILE_CHOOSER (GCFile));
+
 	// open the file
 	gcode = fopen (filename, "r");
-	
+
 	while (getline(&buf, &len, gcode) != -1)
 	{
 		est_time += parseGCTime (buf, len);
 		lines++;
 	}
-	
+
 	// display the total number of lines
 	updateGCLine ((int) lines, 0);
-	
+
 	// update the estimated time
 	updateGCEstTime ((int) est_time, 0);
 	rem_time = est_time;
-	updateGCRemTime ((int) rem_time, 0);
-	
+	updateGCRemTime ((int) last_speed, 0);
+
 	// close and re-open the file
 	free(buf);
 	fclose(gcode);
 	gcode = fopen (filename, "r");
-	
+
+	if(gcode != NULL)
+	{
+		Tr_Playable();
+	}
+
 	// queue up sending (executed by the send_gcode thread)
 	// set the mode to playing
 	exline = 0;
@@ -279,13 +294,17 @@ void term_send(void)
 	buf = NULL;
 	if (gcode) fclose (gcode);
 	gcode = NULL;
-	
+
 }
 
-int levApply(char *code, char *newcode);
+extern int levApply(char *code, char *newcode);
+extern int isHoldoff(void);
+extern void display_status (char *buf);
 
 int levelTimeout = 0;
-#define MINPLANNER 5
+
+#define MINPLANNER 5		// normal
+#define MINPLANNEROVER 31			// reduced queue to apply feed rate override
 void *send_gcode (void *ptr)
 {
 	int len = 0;
@@ -321,7 +340,7 @@ void *send_gcode (void *ptr)
 						levSave();
 						Tr_Level();
 					}
-					
+
 				}
 			}
 		}
@@ -334,14 +353,17 @@ void *send_gcode (void *ptr)
 				if (rem_time < 0) rem_time = 0;
 				updateGCRemTime ((int) rem_time, 1);
 			}
-				
+
 			// make sure there is room in the planner queue
-			if (getPQ() > MINPLANNER)
+			if (!isHoldoff() && (getPQ() > (isFO()? MINPLANNEROVER:MINPLANNER)))
 			{
 				// read a line
 				usleep(50000);
 				rv = getline(&buf, &len, gcode);
-				
+
+				// save the feed rate in case we want to override it
+				last_speed = getFeed(buf);
+
 				// if the line has gcode in it send it
 				if (rv == -1)
 				{
@@ -372,7 +394,13 @@ void *send_gcode (void *ptr)
 							// label to inch
 							measure_setmm();
 						}
-						
+
+						// handle display of commented lines
+						if (strstr(buf, "("))
+						{
+							display_status(buf);
+						}
+
 						// pause for tool change
 						if (strstr(buf, "m6") || strstr(buf, "M6"))
 						{
@@ -380,15 +408,19 @@ void *send_gcode (void *ptr)
 							Tr_M6();
 						}
 
+						// maybe apply a feed override feedFactor
+						if (isFO())
+						{
+							foApply(buf);
+						}
+
 						// apply leveling
-						newbuf[0] = 0;
-printf("before levApply\n");
-						levApply (buf, newbuf);
-printf("lev before >%s< after >%s<\n", buf, &newbuf[0]);
-						
+//						newbuf[0] = 0;
+//						levApply (buf, newbuf);
+
 						// send the gcode line
 						sersendNT(buf);
-						
+
 						// update the executing gcode line number
 						exline++;
 						updateExLine ((int) exline, 1);
@@ -398,4 +430,3 @@ printf("lev before >%s< after >%s<\n", buf, &newbuf[0]);
 		}
 	}
 }
-
