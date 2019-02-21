@@ -26,11 +26,15 @@ typedef struct je
 {
 	char axis[2];
 	float magnitude;
+//	int ticks;
 
 } jog_ele;
 
 void sersendz(char *buf);
 
+int last_time = 0;
+//int delta = 0;
+int tick = 0;
 #define MINPLANNERJOG 4
 // jog queue handling thread
 void *jog_queue (void *ptr)
@@ -40,6 +44,9 @@ void *jog_queue (void *ptr)
 	jog_ele	je_tot;
   char temp[65];
 	int rc, i;
+	static int g91flag = 0;
+	float jogfeed = 0.0;
+
 
 	while (1)
 	{
@@ -54,6 +61,8 @@ void *jog_queue (void *ptr)
 				if (0 != rc )
 				{
         	je_tot.axis[0] = je.axis[0]; je_tot.axis[1] = je.axis[1]; je_tot.magnitude += je.magnitude;
+//					delta = je_tot.ticks - last_time;
+//					last_time = je_tot.ticks;
 				}
 				else
 				{
@@ -63,15 +72,35 @@ void *jog_queue (void *ptr)
 			// we have a jog entry, wait until the tinyg can take it
 			while (1)
 			{
+				if(getPQ() == 32 && (tick -last_time) > 100 && g91flag)
+				{
+					sersendz("g90\n");
+					g91flag = 0;
+				}
 				if (je_tot.axis[0] == 0 || je_tot.magnitude == 0.0)
 				{
 					break;	// nothing to do
 				}
 				if (getPQ() > MINPLANNERJOG)
 				{
-					sprintf(temp, "g91 g0 %s%f\n", je_tot.axis, je_tot.magnitude);
+					if (tick - last_time > 21)
+					{
+							jogfeed = 1000;
+					}
+					else
+					{
+						jogfeed = (51 - (tick - last_time))*100.0;
+						if(jogfeed < 100) jogfeed = 100;
+						if(jogfeed > 5000) jogfeed = 5000;
+					}
+					if(g91flag && jogfeed == 100 )
+					{
+						sersendz("!%\n");	// stopped
+					}
+					sprintf(temp, "g91 g1 f%f %s%f\n", jogfeed, je_tot.axis, je_tot.magnitude);
 					sersendz(temp);
-					sersendz("g90\n");
+					last_time = tick;
+					g91flag = 1;
 					break;
 				}
 				else
@@ -92,7 +121,7 @@ float getFeedFactor (void);
 
 void jog(char *what, float howmuch)
 {
-    char temp[65];
+  char temp[65];
 	jog_ele	je;
 	int rc;
 
@@ -116,6 +145,7 @@ void jog(char *what, float howmuch)
 	{
 		strcpy (je.axis, what);
 		je.magnitude = howmuch;
+//		je.ticks = ticks;
 		rc = mq_send (mq, (char *)&je, sizeof(jog_ele), 0);
 	}
 	else if(isGCPlay() && what[0] == 'f')
@@ -128,6 +158,7 @@ void jog(char *what, float howmuch)
 }
 
 int value = 0;
+//int tick = 0;
 
 // thread to check for quadrature value changes
 void *jog_quad (void *ptr)
@@ -139,7 +170,8 @@ void *jog_quad (void *ptr)
 	lastval = value / 4;
 	while (1)
 	{
-		usleep(10000);
+		usleep(10000);	// 100 times/second
+		tick++;
 
 		// if we are jogging and the jog wheel moved make the update
 		newval = value / 4;
@@ -177,7 +209,7 @@ void *jog_quad (void *ptr)
 				jog("f", tJ);
 			}
 		}
-    }
+  }
 }
 
 void quadInit(void)
@@ -202,8 +234,8 @@ int lastEncoded = 0;
 // isr for pin value changes
 void updateEncoders()
 {
-	int MSB = digitalRead(23);
-	int LSB = digitalRead(24);
+	int MSB = digitalRead(24);
+	int LSB = digitalRead(23);
 	int encoded = (MSB << 1) | LSB;
 	int sum = (lastEncoded << 2) | encoded;
 	lastEncoded = encoded;

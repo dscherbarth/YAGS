@@ -34,6 +34,13 @@ GtkWidget *zeroY;
 GtkWidget *zeroZ;
 GtkWidget *zeroA;
 
+GtkWidget *goX;
+GtkWidget *goY;
+GtkWidget *goZ;
+GtkWidget *goA;
+
+GtkWidget *toggleCoor;
+
 GtkWidget *commstat;
 GtkWidget *lineh;
 GtkWidget *gclineh;
@@ -92,6 +99,8 @@ void destroy (void)
      gtk_main_quit ();
 }
 
+int coor = 0;
+
 void zeroX_Clicked(GtkButton * b, gpointer data)
 {
     (void)b;
@@ -102,9 +111,18 @@ void zeroX_Clicked(GtkButton * b, gpointer data)
 
 	if(isIdle())
 	{
+    // get the current xyza values
 		getCurr(&x, &y, &z, &a);
-		sprintf(temp, "g10 L2 P1 x%f\n", x);
-		sersendz (temp);		// set the zero values
+
+    // set the g10 offset values
+    sprintf(temp, "g10 L2 P%d x%8.4f\n", coor + 1, x);
+    sersendz (temp);		// set the zero values
+
+    // reset g28 so zero is here TCSANOW
+    sprintf(temp, "g28.3 x%8.4f\n", x);
+    sersendz (temp);		// set the zero values
+    sersendz ("{}\n");		// fetch an update
+
 		dX = 0.0;
 		gtk_label_set (GTK_LABEL (droX), "000.000");
 	}
@@ -120,9 +138,18 @@ void zeroY_Clicked(GtkButton * b, gpointer data)
 
 	if(isIdle())
 	{
+    // get the current xyza values
 		getCurr(&x, &y, &z, &a);
-		sprintf(temp, "g10 L2 P1 y%f\n", y);
-		sersendz (temp);		// set the zero values
+
+    // set the g10 offset values
+    sprintf(temp, "g10 L2 P%d y%8.4f\n", coor + 1, y);
+    sersendz (temp);		// set the zero values
+
+    // reset g28 so zero is here TCSANOW
+    sprintf(temp, "g28.3 y%8.4f\n", y);
+    sersendz (temp);		// set the zero values
+    sersendz ("{}\n");		// fetch an update
+
 		dY = 0.0;
 		gtk_label_set (GTK_LABEL (droY), "000.000");
 	}
@@ -138,9 +165,19 @@ void zeroZ_Clicked(GtkButton * b, gpointer data)
 
 	if(isIdle())
 	{
+    // get the current xyza values
 		getCurr(&x, &y, &z, &a);
-		sprintf(temp, "g10 L2 P1 z%f\n", z);
-		sersendz (temp);		// set the zero values
+
+
+    // set the g10 offset values
+    sprintf(temp, "g10 L2 P%d z%8.4f\n", coor + 1, z);
+    sersendz (temp);		// set the zero values
+
+    // reset g28 so zero is here TCSANOW
+    sprintf(temp, "g28.3 z%8.4f\n", z);
+    sersendz (temp);		// set the zero values
+    sersendz ("{}\n");		// fetch an update
+
 		dZ = 0.0;
 		gtk_label_set (GTK_LABEL (droZ), "000.000");
 	}
@@ -156,9 +193,19 @@ void zeroA_Clicked(GtkButton * b, gpointer data)
 
 	if(isIdle())
 	{
+    // get the current xyza values
 		getCurr(&x, &y, &z, &a);
-		sprintf(temp, "g10 L2 P1 a%f\n", a);
-		sersendz (temp);		// set the zero values
+
+
+    // set the g10 offset values
+    sprintf(temp, "g10 L2 P%d a%8.4f\n", coor + 1, a);
+    sersendz (temp);		// set the zero values
+
+    // reset g28 so zero is here TCSANOW
+    sprintf(temp, "g28.3 a%8.4f\n", a);
+    sersendz (temp);		// set the zero values
+    sersendz ("{}\n");		// fetch an update
+
 		dA = 0.0;
 		gtk_label_set (GTK_LABEL (droA), "000.000");
 	}
@@ -334,6 +381,76 @@ void jogdot001_Clicked(GtkButton * b, gpointer data)
     jogMult = 0.001;
 }
 
+void goX_Clicked(GtkButton * b, gpointer data)
+{
+  if(isIdle())
+	{
+    sersendz ("g0 x0\n");		// go to the zero setting
+  }
+}
+void goY_Clicked(GtkButton * b, gpointer data)
+{
+  if(isIdle())
+	{
+    sersendz ("g0 y0\n");		// go to the zero setting
+  }
+}
+void goZ_Clicked(GtkButton * b, gpointer data)
+{
+  if(isIdle())
+	{
+    sersendz ("g0 z0\n");		// go to the zero setting
+  }
+}
+void goA_Clicked(GtkButton * b, gpointer data)
+{
+  if(isIdle())
+	{
+    sersendz ("g0 a0\n");		// go to the zero setting
+  }
+}
+
+void togglecoor_Clicked(GtkButton * b, gpointer data)
+{
+  if(coor == 0)
+  {
+      coor++;
+      gtk_button_set_label(GTK_BUTTON(toggleCoor), "G55 Coor");
+      sersendz ("g55\n");
+  }
+  else if(coor == 1)
+  {
+    coor++;
+    gtk_button_set_label(GTK_BUTTON(toggleCoor), "G56 Coor");
+    sersendz ("g56\n");
+  }
+  else if(coor == 2)
+  {
+    coor++;
+    gtk_button_set_label(GTK_BUTTON(toggleCoor), "G57 Coor");
+    sersendz ("g57\n");
+  }
+  else if(coor == 3)
+  {
+    coor++;
+    gtk_button_set_label(GTK_BUTTON(toggleCoor), "G58 Coor");
+    sersendz ("g58\n");
+  }
+  else if(coor == 4)
+  {
+    coor++;
+    gtk_button_set_label(GTK_BUTTON(toggleCoor), "G59 Coor");
+    sersendz ("g59\n");
+  }
+  else if(coor == 5)
+  {
+    coor = 0;
+    gtk_button_set_label(GTK_BUTTON(toggleCoor), "Mach Coor");
+    sersendz ("g54\n");
+  }
+  sersendz ("{}\n");		// fetch an update
+
+}
 void enablePlay(int enF)
 {
   gtk_widget_set_sensitive(Play, enF);
@@ -378,7 +495,7 @@ void Level_Clicked(GtkButton * b, gpointer data)
     (void)b;
     (void)data;
 
-	if (isCommUp())
+	if (isCommUp() && isIdle())
 	{
 		Tr_Level();
 	}
@@ -399,7 +516,7 @@ void Goto_Zero_Clicked(GtkButton * b, gpointer data)
 
 	if(isIdle())
 	{
-		sersendz ("g0 z0 x0 y0\n");		// go to the zero setting
+    sersendz ("g0 z0 x0 y0\n");		// go to the zero setting
 	}
 }
 
@@ -411,6 +528,7 @@ void Home_Cycle_Clicked(GtkButton * b, gpointer data)
 	if(isIdle())
 	{
 		sersend ("g28.2 z0 x0 y0\n", 15);		// home cycle
+    sersendz("g10 L2 P1 x0 y0 z0 a0\n");
 	}
 }
 
@@ -430,18 +548,25 @@ void Set_Zero_Clicked(GtkButton * b, gpointer data)
 {
     (void)b;
     (void)data;
-//	char temp[80];
-//	float x, y, z, a;
+	char temp[80];
+	float x, y, z, a;
 
 
 	if(isIdle())
 	{
-//		getCurr(&x, &y, &z, &a);
+    // get the current xyza values
+		getCurr(&x, &y, &z, &a);
 
-//		sprintf(temp, "g10 L2 P1 x%f y%f z%f\n", x, y, z);
-//printf("set zero >%s< x%f y%f z%f\n", temp, x, y, z);
-		sersendz ("g28.3 x0 y0 z0\n");		// set the zero values
-		sersendz ("g10 l2 p1 x0 y0 z0\n");		// set the zero values
+
+    // set the g10 offset values
+    sprintf(temp, "g10 L2 P%d x%8.4f y%8.4f z%8.4f a%8.4f\n", coor + 1, x, y, z, a);
+    sersendz (temp);		// set the zero values
+
+    // reset g28 so zero is here TCSANOW
+    sprintf(temp, "g28.3 x%8.4f y%8.4f z%8.4f a%8.4f\n", x, y, z, a);
+    sersendz (temp);		// set the zero values
+    sersendz ("{}\n");		// fetch an update
+
 		dA = 0.0;
 		gtk_label_set (GTK_LABEL (droA), "000.000");
 		dX = 0.0;
@@ -550,13 +675,13 @@ void cool_clicked(GtkButton * b, gpointer data)
 		{
 			cool_mode = 0;
 			gtk_button_set_label(GTK_BUTTON(CoolCtrl), "Cooling On");
-			sersendNT ("M9\n");	// spindle off
+			sersendNT ("M9\n");	// cooling off
 		}
 		else
 		{
 			cool_mode = 1;
 			gtk_button_set_label(GTK_BUTTON(CoolCtrl), "Cooling Off");
-			sersendNT ("M7 M8\n");	// spindle on
+			sersendNT ("M7 M8\n");	// cooling on
 		}
 	}
 }
@@ -640,9 +765,17 @@ void setupui (int argc, char **argv)
     zeroZ = GTK_WIDGET( gtk_builder_get_object( builder, "ZeroZ" ) );
     zeroA = GTK_WIDGET( gtk_builder_get_object( builder, "ZeroA" ) );
 
+    // get zero command handles
+    goX = GTK_WIDGET( gtk_builder_get_object( builder, "GoX" ) );
+    goY = GTK_WIDGET( gtk_builder_get_object( builder, "GoY" ) );
+    goZ = GTK_WIDGET( gtk_builder_get_object( builder, "GoZ" ) );
+    goA = GTK_WIDGET( gtk_builder_get_object( builder, "GoA" ) );
+
+    toggleCoor = GTK_WIDGET( gtk_builder_get_object( builder, "machcoor" ) );
+
     commstat = GTK_WIDGET( gtk_builder_get_object( builder, "commstat" ) );
     lineh 	= GTK_WIDGET( gtk_builder_get_object( builder, "lineh" ) );
-	gclineh 	= GTK_WIDGET( gtk_builder_get_object( builder, "gclineh" ) );
+  	gclineh 	= GTK_WIDGET( gtk_builder_get_object( builder, "gclineh" ) );
     feedh 	= GTK_WIDGET( gtk_builder_get_object( builder, "feedh" ) );
     velocityh = GTK_WIDGET( gtk_builder_get_object( builder, "velh" ) );
     gtk_widget_modify_font(lineh, efl);
@@ -690,6 +823,13 @@ void setupui (int argc, char **argv)
     gtk_signal_connect (GTK_OBJECT(zeroZ), "clicked", GTK_SIGNAL_FUNC(zeroZ_Clicked), NULL);
     gtk_signal_connect (GTK_OBJECT(zeroA), "clicked", GTK_SIGNAL_FUNC(zeroA_Clicked), NULL);
 
+    gtk_signal_connect (GTK_OBJECT(goX), "clicked", GTK_SIGNAL_FUNC(goX_Clicked), NULL);
+    gtk_signal_connect (GTK_OBJECT(goY), "clicked", GTK_SIGNAL_FUNC(goY_Clicked), NULL);
+    gtk_signal_connect (GTK_OBJECT(goZ), "clicked", GTK_SIGNAL_FUNC(goZ_Clicked), NULL);
+    gtk_signal_connect (GTK_OBJECT(goA), "clicked", GTK_SIGNAL_FUNC(goA_Clicked), NULL);
+
+    gtk_signal_connect (GTK_OBJECT(toggleCoor), "clicked", GTK_SIGNAL_FUNC(togglecoor_Clicked), NULL);
+
     gtk_signal_connect (GTK_OBJECT(jog1), "clicked", GTK_SIGNAL_FUNC(jog1_Clicked), NULL);
     gtk_signal_connect (GTK_OBJECT(jogdot1), "clicked", GTK_SIGNAL_FUNC(jogdot1_Clicked), NULL);
     gtk_signal_connect (GTK_OBJECT(jogdot01), "clicked", GTK_SIGNAL_FUNC(jogdot01_Clicked), NULL);
@@ -713,6 +853,7 @@ void setupui (int argc, char **argv)
     gtk_signal_connect (GTK_OBJECT(Level), "clicked", GTK_SIGNAL_FUNC(Level_Clicked), NULL);
 
     gtk_signal_connect (GTK_OBJECT(GCFile), "file-set", GTK_SIGNAL_FUNC(file_set), NULL);
+    gtk_file_chooser_set_current_folder_uri ((GtkFileChooser *)GCFile, "file:///home/pi/Documents");
 
     /* Destroy builder, since we don't need it anymore */
     g_object_unref( G_OBJECT( builder ) );

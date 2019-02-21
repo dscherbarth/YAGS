@@ -197,13 +197,11 @@ void levConfWrite( float xs, float ys, float xe, float ye);
 int estCGFile (void)
 {
 	char *filename;
-	char temp[35];
 	char *buf = NULL;
 	int len = 200;
 	int lines = 0;
 	int est_time = 0;
 	FILE *tmpgcode = NULL;
-
 
 	// this is where we open the file and send gcode lines
 	filename = gtk_file_chooser_get_filename (GTK_FILE_CHOOSER (GCFile));
@@ -211,33 +209,39 @@ int estCGFile (void)
 	// open the file
 	tmpgcode = fopen (filename, "r");
 
-	// read the entire file, counting lines
-	initMinMax();
-
-	// read the entire file, counting lines
-	while (getline(&buf, &len, tmpgcode) != -1)
+	if(NULL != tmpgcode)
 	{
-		est_time += parseGCTime (buf, len);
-		lines++;
+		// read the entire file, counting lines
+		initMinMax();
+
+		// read the entire file, counting lines
+		while (getline(&buf, &len, tmpgcode) != -1)
+		{
+			est_time += parseGCTime (buf, len);
+			lines++;
+		}
+		if(lines)
+		{
+			float x1,y1,x2,y2;
+			getMinMax(&x1,&x2,&y1,&y2);
+			printf("minmax results xmin %f ymin %f xmax %f ymax %f\n", x1, y1, x2, y2);
+			levConfWrite( x1, y1, x2, y2);
+
+			// display the total number of lines
+			updateGCLine ((int) lines, 0);
+
+			// update the estimated time
+			updateGCEstTime ((int) est_time, 0);
+
+			// close and re-open the file
+			free(buf);
+			fclose(tmpgcode);
+		}
 	}
-float x1,y1,x2,y2;
-getMinMax(&x1,&x2,&y1,&y2);
-printf("minmax results xmin %f ymin %f xmax %f ymax %f\n", x1, y1, x2, y2);
-levConfWrite( x1, y1, x2, y2);
-
-	// display the total number of lines
-	updateGCLine ((int) lines, 0);
-
-	// update the estimated time
-	updateGCEstTime ((int) est_time, 0);
-
-	// close and re-open the file
-	free(buf);
-	fclose(tmpgcode);
 }
 
-int exline = 0;		// line of executing gcode
 FILE *gcode = NULL;
+int exline = 0;		// line of executing gcode
 int rem_time = 0;
 int PlayCGFile (void)
 {
@@ -248,44 +252,49 @@ int PlayCGFile (void)
 	int lines = 0;
 	int est_time = 0;
 
-
 	// this is where we open the file and send gcode lines
 	filename = gtk_file_chooser_get_filename (GTK_FILE_CHOOSER (GCFile));
 
 	// open the file
+	gcode = NULL;
 	gcode = fopen (filename, "r");
 
-	while (getline(&buf, &len, gcode) != -1)
+	if (NULL != gcode)
 	{
-		est_time += parseGCTime (buf, len);
-		lines++;
+		while (getline(&buf, &len, gcode) != -1)
+		{
+			est_time += parseGCTime (buf, len);
+			lines++;
+		}
+
+		// display the total number of lines
+		updateGCLine ((int) lines, 0);
+
+		// update the estimated time
+		updateGCEstTime ((int) est_time, 0);
+		rem_time = est_time;
+		updateGCRemTime ((int) last_speed, 0);
+
+		// close and re-open the file
+		free(buf);
+		fclose(gcode);
+		gcode = fopen (filename, "r");
+
+		if(gcode != NULL)
+		{
+			Tr_Playable();
+		}
+
+		// queue up sending (executed by the send_gcode thread)
+		// set the mode to playing
+		exline = 0;
+		return 1;
 	}
-
-	// display the total number of lines
-	updateGCLine ((int) lines, 0);
-
-	// update the estimated time
-	updateGCEstTime ((int) est_time, 0);
-	rem_time = est_time;
-	updateGCRemTime ((int) last_speed, 0);
-
-	// close and re-open the file
-	free(buf);
-	fclose(gcode);
-	gcode = fopen (filename, "r");
-
-	if(gcode != NULL)
-	{
-		Tr_Playable();
-	}
-
-	// queue up sending (executed by the send_gcode thread)
-	// set the mode to playing
-	exline = 0;
-
+	return 0;
 }
 
 char *buf = NULL;
+
 char newbuf[350];
 
 void term_send(void)
@@ -311,9 +320,10 @@ void *send_gcode (void *ptr)
 	int rv;
 	int lv;
 	int subseconds = 0;
+
 	while (1)
 	{
-		usleep(5000);
+		usleep(20000);
 		levelTimeout++;
 		if (isLevel())
 		{

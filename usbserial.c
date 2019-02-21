@@ -80,7 +80,7 @@ void set_blocking (int fd, int should_block)
 int readLine (int fd, char *line)
 {
 	int n, i = 0, rval = 456;
-	char temp[120];
+	char temp[200];
 
 	memset (line, 0, 200);
 
@@ -110,6 +110,7 @@ int readLine (int fd, char *line)
 			{
 				// buffer overrun
 				rval = 237;
+printf("serial line overrun\n");
 				break;
 			}
 		}
@@ -117,20 +118,22 @@ int readLine (int fd, char *line)
 	return rval;
 }
 
+char templine[200];
 int tokenRead(char *line, char *token, float *val, int bump)
 {
-    char *value;
-	char templine[200];
+  char *value, *token2;
 	char *vt;
 	int rv = 0;		// default is token not found
 
 
 	// temp copy so we can null the rest of the line for better scanf
-	strcpy(templine, line);
-    token = strstr(templine, token);
-    if (NULL != token)
+	strncpy(templine, line, 199);
+	templine[199] = 0;
+	token2 = NULL;
+  token2 = strstr(templine, token);
+  if (NULL != token2)
     {
-		value = token + bump;	vt = index(value, ',');	if (vt) *vt = 0;
+		value = token2 + bump;	vt = index(value, ',');	if (vt) *vt = 0;
 		sscanf(value, "%f", val);
 		rv = 1;
     }
@@ -142,21 +145,35 @@ float GCLineno;
 void parseLine (char *line, float *X, float *Y, float *Z, float *A, float *F, float *V, float *S, int *bitmap)
 {
 	*bitmap = 0;
-
+//printf("parse >%s<\n", line);
     // look for posx, y, z, a tags and parse the value
-	if (tokenRead (line, "posx", X, 5)) *bitmap |= 1;
-	if (tokenRead (line, "posy", Y, 5)) *bitmap |= 2;
-	if (tokenRead (line, "posz", Z, 5)) *bitmap |= 4;
-	if (tokenRead (line, "posa", A, 5)) *bitmap |= 8;
+		if (tokenRead (line, "posx", X, 5)) *bitmap |= 1;
+		if (tokenRead (line, "posy", Y, 5)) *bitmap |= 2;
+		if (tokenRead (line, "posz", Z, 5)) *bitmap |= 4;
+		if (tokenRead (line, "posa", A, 5)) *bitmap |= 8;
+
+		if (tokenRead (line, "\"posx\"", X, 7)) *bitmap |= 1;
+		if (tokenRead (line, "\"posy\"", Y, 7)) *bitmap |= 2;
+		if (tokenRead (line, "\"posz\"", Z, 7)) *bitmap |= 4;
+		if (tokenRead (line, "\"posa\"", A, 7)) *bitmap |= 8;
 
 	// also look for line, feed and vel
 	if (tokenRead (line, "feed", F, 5)) *bitmap |= 16;
 	if (tokenRead (line, "vel", V, 4)) *bitmap |= 32;
 
+	if (tokenRead (line, "\"feed\"", F, 7)) *bitmap |= 16;
+	if (tokenRead (line, "\"vel\"", V, 6)) *bitmap |= 32;
+
 	// get the status of the planner queue
 	tokenRead (line, "qr", &qr, 3);
 	tokenRead (line, "qo", &qo, 3);
 	tokenRead (line, "qi", &qi, 3);
+
+	tokenRead (line, "\"qr\"", &qr, 5);
+	tokenRead (line, "\"qo\"", &qo, 5);
+	tokenRead (line, "\"qi\"", &qi, 5);
+
+//printf("queue >%f<\n", qr);
 
 	// get the line number
 	tokenRead (line, "line", &GCLineno, 5);
@@ -258,6 +275,7 @@ void *update_serial (void *ptr)
 			char *safe1 = "G21 G17\n";	// (G20 inch/G21 Metric, XY plane)
 			char *safe2 = "G64 G80\n";	// (normal cutting mode, cancel canned cycles)
 			char *safe3 = "G90 G94 G54 M5 M9\n";		// (absolute mode, feed per minute, coord system 1, spindle and coolant off)
+			write (fd, "!%\n", 3);			// make sure the queue is empty
 			write(fd, safe1, strlen(safe1));
 			write(fd, safe2, strlen(safe2));
 			write(fd, safe3, strlen(safe3));
@@ -301,6 +319,7 @@ void *update_serial (void *ptr)
 				}
 
 				// parse values line:0,posx:0.016,posy:0.000,posz:-7.000,posa:3.000,feed:0.000,vel:61.987,unit:1,coor:1,dist:0,frmo:0,momo:0,stat:5
+				tX = currX; tY = currY; tZ = currZ; tA = currA;
 				parseLine (templine, &tX, &tY, &tZ, &tA, &tF, &tV, &tS, &bitmap);
 				currX = tX; currY = tY; currZ = tZ; currA = tA;
 

@@ -105,6 +105,8 @@ void Tr_Playable(void)
 
 }
 
+extern int PlayGCFile();
+
 // transition to Play
 void Tr_Play(void)
 {
@@ -115,13 +117,14 @@ void Tr_Play(void)
 	{
 		// from idle to play a gcode file
 		// get the file name and handle and setup to send itoa
-		PlayCGFile ();
-
-		// state is GCPLAY
-		state = STATEGCPLAY;
-		enablePlay(0);
-		enablePause(1);
-		enableStop(1);
+		if (PlayCGFile ())
+		{
+			// state is GCPLAY
+			state = STATEGCPLAY;
+			enablePlay(0);
+			enablePause(1);
+			enableStop(1);
+		}
 	}
 	else if (state == STATEFREEH)
 	{
@@ -188,8 +191,10 @@ void Tr_Stop(void)
 
 		// % to idle from freehold
 		sersendNT ("!%");		// clear queue
+    usleep(150000);
+    sersendNT ("M5 M9\n");    // stop stindle and cooling
+printf("stop the spindle 1\n");
 
-		// state is GCPLAY
 		state = STATEIDLE;
 		usleep(350000);
 		updateExLine ((int) 0, 0);
@@ -201,9 +206,12 @@ void Tr_Stop(void)
 	else if (state == STATEFREEH)
 	{
 		// % to idle from freehold
+    term_send();
 		sersendNT ("!%");		// clear queue
+    usleep(150000);
+    sersendNT ("M5 M9\n");    // stop stindle and cooling
+    printf("stop the spindle 2\n");
 
-		// state is GCPLAY
 		state = STATEIDLE;
 		enablePlay(1);
 		enablePause(0);
